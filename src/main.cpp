@@ -1,3 +1,4 @@
+///////////////////////COPYRIGHT INOVOKASI 2024////////////////
 #include <Arduino.h>
 #include <Adafruit_Sensor.h>
 #include <DHT.h>
