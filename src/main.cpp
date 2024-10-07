@@ -8,7 +8,7 @@
 #define DHTPIN D7
 #define PINMQ A0
 #define PINRELAY D6
-#define PINLEDMerah D1 //
+#define PINLEDMerah D1
 #define PINLEDBiru D2
 #define PINLEDHijau D5
 #define LED_INTERNAL LED_BUILTIN
@@ -23,33 +23,25 @@ float humidity;
 float temperature;
 float nilai_Amonia;
 
-unsigned long previousMillis = 0; // Variabel untuk menyimpan waktu sebelumnya
-const long interval = 60000;      // Interval 1 menit (60000 milidetik)
+unsigned long previousMillis = 0;
+const long interval = 60000; // Interval 1 menit (60000 ms)
 
 // HTTP client Config
-// Replace with your network credentials
 const char *ssid = "Kontrak 1";
 const char *password = "bayardulu123";
 const int id_device = 1;
 
-// Server Url
-String URL_temperature = "http://iqacs-chick.research-ai.my.id/public/temperature_data.php";
-String URL_amonia = "http://iqacs-chick.research-ai.my.id/public/amonia_data.php";
-String URL_humidity = "http://iqacs-chick.research-ai.my.id/public/humidity_data.php";
+// Server URLs using const char arrays instead of String
+const char URL_temperature[] = "http://iqacs-chick.research-ai.my.id/public/temperature_data.php";
+const char URL_amonia[] = "http://iqacs-chick.research-ai.my.id/public/amonia_data.php";
+const char URL_humidity[] = "http://iqacs-chick.research-ai.my.id/public/humidity_data.php";
 
-// REPLACE with your Domain name and URL path or IP address with path
-// const char *serverName = "https://example.com/post-esp-data.php";
-
-//////
 void readDHT21()
 {
   delay(1);
-  // Get DHT Temperature
   humidity = dht.readHumidity();
-  // Read temperature as Celsius (the default)
   temperature = dht.readTemperature();
 
-  // Check Sensor Condition
   if (isnan(humidity) || isnan(temperature))
   {
     Serial.println(F("Failed to read from DHT sensor!"));
@@ -83,13 +75,11 @@ void readMQ135()
 
 void showSensorError()
 {
-  // All Sensor OK
   if (DHTCondition == true && MQ135Condition == true)
   {
     Serial.println("AllSensor OK");
   }
-  // DHT ok, MQ135 broke
-  if (DHTCondition == true && MQ135Condition == false)
+  else if (DHTCondition == true && MQ135Condition == false)
   {
     for (int i = 0; i < 2; i++)
     {
@@ -101,8 +91,7 @@ void showSensorError()
       delay(200);
     }
   }
-  // DHT broke, MQ135 ok
-  if (DHTCondition == false && MQ135Condition == true)
+  else if (DHTCondition == false && MQ135Condition == true)
   {
     for (int i = 0; i < 3; i++)
     {
@@ -112,12 +101,9 @@ void showSensorError()
       digitalWrite(PINLEDBiru, LOW);
       digitalWrite(PINLEDMerah, LOW);
       delay(200);
-      Serial.println(i);
-      delay(1);
     }
   }
-  // All Sensor Broke
-  if (DHTCondition == false && MQ135Condition == false)
+  else
   {
     for (int i = 0; i < 4; i++)
     {
@@ -139,18 +125,18 @@ void handleAllLed(bool ledMerah, bool ledKuning, bool ledBiru)
   delay(1);
 }
 
-void sendDataHandle(const int idalat, float nilaisensor, String URL)
+// Mengirim data menggunakan char array alih-alih String
+void sendDataHandle(const int idalat, float nilaisensor, const char *URL)
 {
-
-  delay(20);
-  String postData = (String) "id_alat=" + idalat + "&nilai=" + nilaisensor;
+  char postData[50]; // Memastikan buffer cukup untuk menampung data
+  snprintf(postData, sizeof(postData), "id_alat=%d&nilai=%.2f", idalat, nilaisensor); 
 
   WiFiClient client;
   HTTPClient http;
   http.begin(client, URL);
   http.addHeader("Content-Type", "application/x-www-form-urlencoded");
 
-  auto httpCode = http.POST(postData);
+  int httpCode = http.POST(postData);
   String payload = http.getString();
   Serial.println(URL);
   Serial.println(postData);
@@ -158,17 +144,35 @@ void sendDataHandle(const int idalat, float nilaisensor, String URL)
 
   http.end();
 }
-///
 
-// put function declarations here:
+void handleLEDState()
+{
+  bool redLedState = digitalRead(PINLEDMerah);
+  bool blueLedState = digitalRead(PINLEDBiru);
+  bool greenLedState = digitalRead(PINLEDHijau);
+
+  if (redLedState)
+  {
+    digitalWrite(PINLEDMerah, HIGH);
+    delay(1);
+  }
+  if (blueLedState)
+  {
+    digitalWrite(PINLEDBiru, HIGH);
+    delay(1);
+  }
+  if (greenLedState)
+  {
+    digitalWrite(PINLEDHijau, HIGH);
+    delay(1);
+  }
+}
+
 void setup()
 {
-  // put your setup code here, to run once:
   Serial.begin(115200);
   Serial.println("Start Program");
   delay(1);
-
-  Serial.println(F("DHTxx test!"));
 
   dht.begin();
   pinMode(PINMQ, INPUT);
@@ -182,7 +186,6 @@ void setup()
   pinMode(PINLEDBiru, OUTPUT);
   pinMode(PINLEDHijau, OUTPUT);
   handleAllLed(0, 0, 0);
-
   digitalWrite(PINLEDMerah, HIGH);
 
   WiFi.begin(ssid, password);
@@ -211,36 +214,34 @@ void setup()
 
 void loop()
 {
-  // put your main code here, to run repeatedly:
   Serial.println("Run Loop Program");
   readDHT21();
   readMQ135();
-  // Check the Sensor
-
   delay(2000);
-  // Serial.println(DHTCondition);
-  // Serial.println(MQ135Condition);
 
+  handleLEDState();
   showSensorError();
+
   if (DHTCondition && MQ135Condition)
   {
     unsigned long currentMillis = millis();
     if (currentMillis - previousMillis >= interval)
     {
-      // Menyimpan waktu sekarang sebagai waktu sebelumnya
       previousMillis = currentMillis;
 
-      sendDataHandle(id_device,temperature,URL_temperature);
+      sendDataHandle(id_device, temperature, URL_temperature);
       digitalWrite(PINLEDHijau, HIGH);
       delay(200);
       digitalWrite(PINLEDHijau, LOW);
       delay(200);
-      sendDataHandle(id_device,humidity,URL_humidity);
+
+      sendDataHandle(id_device, humidity, URL_humidity);
       digitalWrite(PINLEDHijau, HIGH);
       delay(200);
       digitalWrite(PINLEDHijau, LOW);
       delay(200);
-      sendDataHandle(id_device,nilai_Amonia,URL_amonia);
+
+      sendDataHandle(id_device, nilai_Amonia, URL_amonia);
       digitalWrite(PINLEDHijau, HIGH);
       delay(200);
       digitalWrite(PINLEDHijau, LOW);
