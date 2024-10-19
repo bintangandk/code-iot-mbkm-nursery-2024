@@ -39,6 +39,7 @@ const char *run_program = "";
 #define PENETASAN_ITIK 0 // Set to 1 to enable
 #define NURSERY_KOPI 1   // Set to 1 to enable
 #define KANDANG_AYAM 0   // Set to 1 to enable
+//////////////////////////////////////////////////////
 
 // Conditional compilation check to ensure only one feature is enabled
 #if (PENETASAN_ITIK + NURSERY_KOPI + KANDANG_AYAM) > 1
