@@ -18,6 +18,7 @@ DHT dht(DHTPIN, DHTTYPE);
 
 bool DHTCondition = false;
 bool MQ135Condition = false;
+bool ESPRun = false;
 
 float humidity;
 float temperature;
@@ -27,14 +28,43 @@ unsigned long previousMillis = 0;
 const long interval = 60000; // Interval 1 menit (60000 ms)
 
 // HTTP client Config
-const char *ssid = "Kontrak 1";
-const char *password = "bayardulu123";
+const char *ssid = "KSI-STUDENT";
+const char *password = "12344321";
 const int id_device = 1;
 
-// Server URLs using const char arrays instead of String
+// Declare a constant char pointer for the running mode description
+const char *run_program = "";
+
+/////////////////// Pemilihan alat ////////////////////
+#define PENETASAN_ITIK 0 // Set to 1 to enable
+#define NURSERY_KOPI 1   // Set to 1 to enable
+#define KANDANG_AYAM 0   // Set to 1 to enable
+
+// Conditional compilation check to ensure only one feature is enabled
+#if (PENETASAN_ITIK + NURSERY_KOPI + KANDANG_AYAM) > 1
+#error "Hanya Aktifkan Salah Satu."
+#elif (PENETASAN_ITIK + NURSERY_KOPI + KANDANG_AYAM) == 0
+#error "Aktifkan Setidaknya Satu."
+#endif
+
+// Link Selection
+#if PENETASAN_ITIK == 1
+// Code specific to Feature 1
 const char URL_temperature[] = "http://iqacs-chick.research-ai.my.id/public/temperature_data.php";
 const char URL_amonia[] = "http://iqacs-chick.research-ai.my.id/public/amonia_data.php";
 const char URL_humidity[] = "http://iqacs-chick.research-ai.my.id/public/humidity_data.php";
+#elif NURSERY_KOPI == 1
+// Code specific to Feature 2
+const char URL_humidity[] = "https://is4ac-nursery.research-ai.my.id/api/device/humidity";
+const char URL_temperature[] = "https://is4ac-nursery.research-ai.my.id/api/device/temperature";
+#elif KANDANG_AYAM == 1
+// Code specific to Feature 3
+const char URL_temperature[] = "http://iqacs-chick.research-ai.my.id/public/temperature_data.php";
+const char URL_amonia[] = "http://iqacs-chick.research-ai.my.id/public/amonia_data.php";
+const char URL_humidity[] = "http://iqacs-chick.research-ai.my.id/public/humidity_data.php";
+#endif
+
+/////////////// Compile check
 
 void readDHT21()
 {
@@ -63,7 +93,7 @@ void readMQ135()
   nilai_Amonia = analogRead(PINMQ);
   Serial.println("Nilai Amonia : " + String(nilai_Amonia));
   delay(1);
-  if (nilai_Amonia < 150 || nilai_Amonia > 1000)
+  if (nilai_Amonia < 50 || nilai_Amonia > 1000)
   {
     MQ135Condition = false;
   }
@@ -75,9 +105,11 @@ void readMQ135()
 
 void showSensorError()
 {
-  if (DHTCondition == true && MQ135Condition == true)
+#if KANDANG_AYAM || PENETASAN_ITIK
+  if ((DHTCondition == true && MQ135Condition == true))
   {
     Serial.println("AllSensor OK");
+    delay(1);
   }
   else if (DHTCondition == true && MQ135Condition == false)
   {
@@ -89,6 +121,8 @@ void showSensorError()
       digitalWrite(PINLEDBiru, LOW);
       digitalWrite(PINLEDMerah, LOW);
       delay(200);
+      Serial.println("MQ135 Error");
+      delay(1);
     }
   }
   else if (DHTCondition == false && MQ135Condition == true)
@@ -101,9 +135,11 @@ void showSensorError()
       digitalWrite(PINLEDBiru, LOW);
       digitalWrite(PINLEDMerah, LOW);
       delay(200);
+      Serial.println("DHT Error");
+      delay(1);
     }
   }
-  else
+  else if (DHTCondition == false && MQ135Condition == false)
   {
     for (int i = 0; i < 4; i++)
     {
@@ -113,8 +149,22 @@ void showSensorError()
       digitalWrite(PINLEDBiru, LOW);
       digitalWrite(PINLEDMerah, LOW);
       delay(200);
+      Serial.println("All Sensor Error");
+      delay(1);
     }
   }
+#elif NURSERY_KOPI
+  if (DHTCondition == true)
+  {
+    Serial.println("DHT OK");
+    delay(1);
+  }
+  else if (DHTCondition == false)
+  {
+    Serial.println("DHT Error");
+    delay(1);
+  }
+#endif
 }
 
 void handleAllLed(bool ledMerah, bool ledKuning, bool ledBiru)
@@ -128,8 +178,8 @@ void handleAllLed(bool ledMerah, bool ledKuning, bool ledBiru)
 // Mengirim data menggunakan char array alih-alih String
 void sendDataHandle(const int idalat, float nilaisensor, const char *URL)
 {
-  char postData[50]; // Memastikan buffer cukup untuk menampung data
-  snprintf(postData, sizeof(postData), "id_alat=%d&nilai=%.2f", idalat, nilaisensor); 
+  char postData[100]; // Memastikan buffer cukup untuk menampung data
+  snprintf(postData, sizeof(postData), "id_alat=%d&nilai=%.2f", idalat, nilaisensor);
 
   WiFiClient client;
   HTTPClient http;
@@ -140,31 +190,65 @@ void sendDataHandle(const int idalat, float nilaisensor, const char *URL)
   String payload = http.getString();
   Serial.println(URL);
   Serial.println(postData);
-  Serial.println(payload);
+  if (httpCode > 0)
+  {
+    String payload = http.getString();
+    Serial.println("Response: " + payload);
+  }
+  else
+  {
+    Serial.printf("Error on HTTP request: %s\n", http.errorToString(httpCode).c_str());
+  }
 
   http.end();
 }
 
 void handleLEDState()
 {
-  bool redLedState = digitalRead(PINLEDMerah);
-  bool blueLedState = digitalRead(PINLEDBiru);
-  bool greenLedState = digitalRead(PINLEDHijau);
-
-  if (redLedState)
-  {
-    digitalWrite(PINLEDMerah, HIGH);
-    delay(1);
-  }
-  if (blueLedState)
+  if (WL_CONNECTED)
   {
     digitalWrite(PINLEDBiru, HIGH);
     delay(1);
+    if (ESPRun)
+    {
+      digitalWrite(PINLEDMerah, HIGH);
+      delay(1);
+    }
   }
-  if (greenLedState)
+}
+
+void checkDeviceConfig()
+{
+  if (PENETASAN_ITIK)
   {
-    digitalWrite(PINLEDHijau, HIGH);
-    delay(1);
+    Serial.println("Konfigurasi Alat Untuk Penetasan Itik");
+  }
+  if (NURSERY_KOPI)
+  {
+    Serial.println("Konfigurasi Alat Untuk Nursery Kopi");
+  }
+  if (KANDANG_AYAM)
+  {
+    Serial.println("Konfigurasi Alat Untuk Kandang Ayam");
+  }
+}
+
+void CheckAllSensor()
+{
+  if (PENETASAN_ITIK)
+  {
+    readDHT21();
+    readMQ135();
+  }
+  if (NURSERY_KOPI)
+  {
+    readDHT21();
+    MQ135Condition = true;
+  }
+  if (KANDANG_AYAM)
+  {
+    readDHT21();
+    readMQ135();
   }
 }
 
@@ -173,20 +257,20 @@ void setup()
   Serial.begin(115200);
   Serial.println("Start Program");
   delay(1);
-
+  ESPRun = true;
   dht.begin();
   pinMode(PINMQ, INPUT);
   pinMode(LED_INTERNAL, OUTPUT);
-  digitalWrite(LED_INTERNAL, HIGH);
-  pinMode(PINRELAY, OUTPUT);
-  digitalWrite(PINRELAY, HIGH);
-  delay(1);
-
   pinMode(PINLEDMerah, OUTPUT);
   pinMode(PINLEDBiru, OUTPUT);
   pinMode(PINLEDHijau, OUTPUT);
   handleAllLed(0, 0, 0);
+  digitalWrite(LED_INTERNAL, HIGH);
+  pinMode(PINRELAY, OUTPUT);
+  digitalWrite(PINRELAY, HIGH);
   digitalWrite(PINLEDMerah, HIGH);
+  checkDeviceConfig();
+  delay(1);
 
   WiFi.begin(ssid, password);
   Serial.println(String("Connecting to :") + ssid);
@@ -199,12 +283,6 @@ void setup()
     Serial.print(".");
   }
   Serial.println("");
-
-  if (WiFi.status() == WL_CONNECTED)
-  {
-    digitalWrite(PINLEDBiru, HIGH);
-  }
-
   Serial.print("Connected to WiFi network with IP Address: ");
   Serial.println(WiFi.localIP());
   delay(1);
@@ -215,20 +293,24 @@ void setup()
 void loop()
 {
   Serial.println("Run Loop Program");
-  readDHT21();
-  readMQ135();
   delay(2000);
 
+  CheckAllSensor();
   handleLEDState();
   showSensorError();
-
+  Serial.println(DHTCondition);
+  Serial.println(MQ135Condition);
   if (DHTCondition && MQ135Condition)
   {
+    Serial.println("Data Siap Di Kirim");
+    delay(1);
     unsigned long currentMillis = millis();
     if (currentMillis - previousMillis >= interval)
     {
       previousMillis = currentMillis;
 
+      // fungsi untuk mengatur jenis url yang akan di kirim
+#if PENETASAN_ITIK == 1 || KANDANG_AYAM == 1
       sendDataHandle(id_device, temperature, URL_temperature);
       digitalWrite(PINLEDHijau, HIGH);
       delay(200);
@@ -246,6 +328,20 @@ void loop()
       delay(200);
       digitalWrite(PINLEDHijau, LOW);
       delay(200);
+
+#elif NURSERY_KOPI == 1
+      sendDataHandle(id_device, temperature, URL_temperature);
+      digitalWrite(PINLEDHijau, HIGH);
+      delay(200);
+      digitalWrite(PINLEDHijau, LOW);
+      delay(200);
+
+      sendDataHandle(id_device, humidity, URL_humidity);
+      digitalWrite(PINLEDHijau, HIGH);
+      delay(200);
+      digitalWrite(PINLEDHijau, LOW);
+      delay(200);
+#endif
     }
   }
 }
