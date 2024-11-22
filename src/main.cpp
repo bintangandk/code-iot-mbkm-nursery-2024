@@ -18,11 +18,15 @@ WiFiClientSecure wifiClientSecure; // Membuat objek WiFiClientSecure untuk konek
 // Pin untuk LED
 #define LED_WIFI D1 // LED WiFi
 #define LED_SEND D2 // LED indikator pengiriman data
+#define LED_POWER D3 // LED indikator power
 
 void setup() {
   Serial.begin(9600); // Memulai serial komunikasi
   pinMode(LED_WIFI, OUTPUT); // Atur LED WiFi sebagai output
-  pinMode(LED_SEND, OUTPUT); // Atur LED pengiriman data sebagai output
+  pinMode(LED_SEND, OUTPUT);
+  pinMode(LED_POWER, OUTPUT); // Atur LED pengiriman data sebagai output
+
+  digitalWrite(LED_POWER, HIGH);
 
   WiFi.begin(ssid, password); // Menghubungkan ke WiFi
 
